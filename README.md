@@ -15,7 +15,7 @@ Open http://127.0.0.1:8080. This is a local preview URL, not a public deployment
 ## Features
 
 - Six curated destinations with search and category filters.
-- Create, edit and delete trips persisted in SQLite.
+- Create, edit and delete trips persisted in PostgreSQL in production or SQLite locally.
 - Per-browser visitor isolation using a random HttpOnly session cookie.
 - Dates, day-by-day itinerary, budget allocation, packing checklist and notes.
 - JSON export for backups; EN/RU translation and light/dark theme.
@@ -35,11 +35,13 @@ Use the Dockerfile or install `requirements.txt` and run:
 gunicorn --bind 0.0.0.0:8080 --workers 2 --threads 4 app:application
 ```
 
-Set `DATABASE_PATH` to a persistent writable path, for example `/data/orbit.sqlite3`. Mount a persistent volume at `/data`. Do not deploy SQLite to an ephemeral filesystem or run multiple replicas with separate databases. Use one service instance and back up the database. Terminate HTTPS at the host proxy, which must sanitize and supply `X-Forwarded-Proto`. Gunicorn is intended for Linux production; the included local preview server is development-only.
+For free hosting, use a Render Python web service with an external Neon PostgreSQL database. Set `DATABASE_URL` to the private connection string in Render environment settings. Never commit this value. The application requires PostgreSQL when running on Render and refuses to silently store production data on its temporary filesystem. No paid disk is needed. See `render.yaml.example` for configuration.
 
-For Render: create a Docker web service from this GitHub repository, attach a persistent disk at `/data`, use `/api/health` as the health endpoint, and expose the host-provided `PORT`. Persistent disks may require a paid plan; confirm the current price before provisioning. Docker already sets `DATABASE_PATH=/data/orbit.sqlite3`. GitHub Pages cannot run this Python backend.
+Free Render services sleep after inactivity, so the first visit can take longer. Database and hosting free tiers have usage limits; review each provider's current terms. PostgreSQL data survives web-server restarts; maintain separate backups for recovery. Local development uses SQLite through `DATABASE_PATH` and needs no PostgreSQL dependency.
 
-Source is prepared for a new standalone GitHub repository. No GitHub repository or public deployment is claimed until the connected providers return their actual URLs. A public URL can open in Chrome immediately after deployment; Google indexing is separate and not guaranteed. Before a broad public launch, add per-IP rate limits at the host, monitoring, disk backups, and account-based authentication if cross-device use is required.
+Terminate HTTPS at the host proxy, which must sanitize forwarding headers. Gunicorn is intended for Linux production; the included preview server is development-only. GitHub Pages cannot run this Python backend.
+
+Source repository: https://github.com/TimurBegimkulov/roam-atlas. Public deployment is pending. A public URL can open in Chrome after deployment; Google indexing is separate and not guaranteed.
 
 ## Verify
 

@@ -1,19 +1,19 @@
-# Review Render's current paid plan and disk pricing before provisioning.
-# Copy to render.yaml only after choosing and approving the hosting plan.
+# Free web service with external PostgreSQL storage. No paid disk.
+# Configure DATABASE_URL from your database provider before deployment.
 services:
   - type: web
     name: roam-atlas
     runtime: python
-    plan: starter
+    plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn --bind 0.0.0.0:$PORT --workers 2 --threads 4 app:application
     healthCheckPath: /api/health
     envVars:
-      - key: DATABASE_PATH
-        value: /var/data/roam-atlas.sqlite3
+      - key: DATABASE_URL
+        sync: false
+      - key: ADMIN_USERNAME
+        value: admin
+      - key: ADMIN_PASSWORD_HASH
+        sync: false
       - key: SITE_URL
         sync: false
-    disk:
-      name: roam-atlas-data
-      mountPath: /var/data
-      sizeGB: 1

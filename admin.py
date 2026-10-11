@@ -46,7 +46,7 @@ def handle(env,headers,reply,connect):
             if attempts and attempts[0]>=5:
                 headers.append(('Retry-After','900'))
                 return reply({'error':'Too many attempts. Try again in 15 minutes.'},'429 Too Many Requests')
-            con.execute('INSERT INTO admin_attempts VALUES (?,1,?) ON CONFLICT(address) DO UPDATE SET attempts=attempts+1',(address,now+900))
+            con.execute('INSERT INTO admin_attempts VALUES (?,1,?) ON CONFLICT(address) DO UPDATE SET attempts=admin_attempts.attempts+1',(address,now+900))
             try:
                 length=int(env.get('CONTENT_LENGTH') or 0)
                 if not 0<length<=2048: raise ValueError()
@@ -56,14 +56,14 @@ def handle(env,headers,reply,connect):
             except (ValueError,TypeError,KeyError): return reply({'error':'Invalid credentials'},'401 Unauthorized')
             valid_password=verify(password,configured)
             if not valid_password or not hmac.compare_digest(username.encode(),os.environ.get('ADMIN_USERNAME','admin').encode()):
-                con.execute('INSERT INTO admin_audit VALUES (?,?,?)',(now,'login_failed',None))
+                con.execute('INSERT INTO admin_audit (at,action,target) VALUES (?,?,?)',(now,'login_failed',None))
                 return reply({'error':'Invalid credentials'},'401 Unauthorized')
             con.execute('DELETE FROM admin_attempts WHERE address=?',(address,))
             token=secrets.token_urlsafe(48)
             # New login revokes any previous admin session.
             con.execute('DELETE FROM admin_sessions')
             con.execute('INSERT INTO admin_sessions VALUES (?,?,?)',(hashlib.sha256(token.encode()).hexdigest(),now+3600,fingerprint))
-            con.execute('INSERT INTO admin_audit VALUES (?,?,?)',(now,'login',None))
+            con.execute('INSERT INTO admin_audit (at,action,target) VALUES (?,?,?)',(now,'login',None))
             headers.append(('Set-Cookie',f'roam_admin={token}; Max-Age=3600{cookie_flags}'))
             return reply({'ok':True,'expiresIn':3600})
         cookies=SimpleCookie()
@@ -83,6 +83,6 @@ def handle(env,headers,reply,connect):
         if path.startswith('/api/admin/trips/') and method=='DELETE':
             trip_id=path.rsplit('/',1)[1]
             changed=con.execute('DELETE FROM trips WHERE id=?',(trip_id,)).rowcount
-            if changed: con.execute('INSERT INTO admin_audit VALUES (?,?,?)',(now,'delete_trip',trip_id))
+            if changed: con.execute('INSERT INTO admin_audit (at,action,target) VALUES (?,?,?)',(now,'delete_trip',trip_id))
             return reply({'deleted':bool(changed)},'200 OK' if changed else '404 Not Found')
         return reply({'error':'Not found'},'404 Not Found')

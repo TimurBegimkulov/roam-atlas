@@ -45,14 +45,21 @@ DESTINATIONS = [
 
 @contextmanager
 def connect():
-    Path(DB).parent.mkdir(parents=True, exist_ok=True)
-    con = sqlite3.connect(DB, timeout=15)
-    con.row_factory = sqlite3.Row
-    con.execute('PRAGMA journal_mode=WAL')
-    con.executescript('''CREATE TABLE IF NOT EXISTS visitors (id TEXT PRIMARY KEY);
-      CREATE TABLE IF NOT EXISTS trips (id TEXT PRIMARY KEY, owner TEXT NOT NULL, data TEXT NOT NULL);''')
+    database_url=os.environ.get('DATABASE_URL','').strip()
+    if database_url:
+        from database import Connection
+        con=Connection(database_url)
+    else:
+        if os.environ.get('RENDER')=='true':
+            raise RuntimeError('DATABASE_URL must be configured for durable free hosting')
+        Path(DB).parent.mkdir(parents=True, exist_ok=True)
+        con = sqlite3.connect(DB, timeout=15)
+        con.row_factory = sqlite3.Row
+        con.execute('PRAGMA journal_mode=WAL')
     try:
         with con:
+            con.executescript('''CREATE TABLE IF NOT EXISTS visitors (id TEXT PRIMARY KEY);
+              CREATE TABLE IF NOT EXISTS trips (id TEXT PRIMARY KEY, owner TEXT NOT NULL, data TEXT NOT NULL);''')
             yield con
     finally:
         con.close()
@@ -134,7 +141,7 @@ def application(env, start_response):
                     return reply({'error':'Invalid trip data'},'400 Bad Request')
                 if method == 'PUT' and not con.execute('SELECT 1 FROM trips WHERE id=? AND owner=?',(trip_id,owner)).fetchone():
                     return reply({'error':'Not found'},'404 Not Found')
-                if method == 'POST': con.execute('INSERT INTO trips VALUES (?,?,?)',(trip_id,owner,json.dumps(record)))
+                if method == 'POST': con.execute('INSERT INTO trips (id,owner,data) VALUES (?,?,?)',(trip_id,owner,json.dumps(record)))
                 else: con.execute('UPDATE trips SET data=? WHERE id=? AND owner=?',(json.dumps(record),trip_id,owner))
                 return reply(record,'201 Created' if method == 'POST' else '200 OK')
             if path.startswith('/api/trips/') and method == 'DELETE':
