@@ -2,7 +2,8 @@ FROM python:3.12-slim
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-COPY app.py admin.py database.py ./
+COPY app.py admin.py database.py accounts.py catalog.py ./
+COPY cities.json.gz countries.json photos.json world.js world.css city.svg ./
 COPY index.html app.js style.css premium.css favicon.svg robots.txt ./
 COPY admin.html admin.js admin.css ./
 RUN useradd --create-home orbit && mkdir /data && chown orbit:orbit /data

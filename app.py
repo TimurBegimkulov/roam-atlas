@@ -3,6 +3,8 @@ import datetime as dt
 from contextlib import contextmanager
 import hashlib
 import admin
+import accounts
+import catalog
 from html import escape
 import json
 import os
@@ -67,7 +69,7 @@ def connect():
 def application(env, start_response):
     status = '200 OK'
     headers = [('X-Content-Type-Options','nosniff'), ('Referrer-Policy','strict-origin-when-cross-origin'),
-               ('X-Frame-Options','DENY'), ('Content-Security-Policy', "default-src 'self'; img-src 'self' https://images.unsplash.com; style-src 'self'; script-src 'self'; connect-src 'self'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'")]
+               ('X-Frame-Options','DENY'), ('Content-Security-Policy', "default-src 'self'; img-src 'self' https://images.unsplash.com https://upload.wikimedia.org https://thumb.wikimedia.org; style-src 'self'; script-src 'self'; connect-src 'self'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'")]
     path, method = env.get('PATH_INFO','/'), env['REQUEST_METHOD']
     if public_url():
         headers.append(('Strict-Transport-Security','max-age=31536000'))
@@ -77,6 +79,12 @@ def application(env, start_response):
         raw = json.dumps(data, ensure_ascii=False).encode()
         start_response(code, headers + [('Content-Type','application/json; charset=utf-8'), ('Cache-Control','no-store'), ('Content-Length',str(len(raw)))])
         return [raw]
+    if path.startswith('/api/account'):
+        return accounts.handle(env,headers,reply,connect)
+    if path == '/api/world' and method == 'GET':
+        return reply(catalog.search(env.get('QUERY_STRING','')))
+    if path == '/api/countries' and method == 'GET':
+        return reply(catalog.COUNTRIES)
     if path.startswith('/api/admin/'):
         return admin.handle(env,headers,reply,connect)
     if path == '/api/health':
@@ -101,7 +109,9 @@ def application(env, start_response):
         token = cookie['orbit_session'].value if 'orbit_session' in cookie else ''
         owner = hashlib.sha256(token.encode()).hexdigest()
         with connect() as con:
-            if not con.execute('SELECT 1 FROM visitors WHERE id=?',(owner,)).fetchone():
+            user=accounts.current(con,env)
+            if user: owner=user['id']
+            if not user and not con.execute('SELECT 1 FROM visitors WHERE id=?',(owner,)).fetchone():
                 token = secrets.token_urlsafe(32)
                 owner = hashlib.sha256(token.encode()).hexdigest()
                 con.execute('INSERT INTO visitors VALUES (?)',(owner,))
@@ -112,7 +122,10 @@ def application(env, start_response):
                 if env.get('HTTP_X_ORBIT_REQUEST') != '1' or (origin and origin.split('://')[-1] != env.get('HTTP_HOST')):
                     return reply({'error':'Forbidden'},'403 Forbidden')
             if path == '/api/trips' and method == 'GET':
-                return reply([json.loads(r['data']) for r in con.execute('SELECT data FROM trips WHERE owner=? ORDER BY rowid DESC',(owner,))])
+                records=[json.loads(r['data']) for r in con.execute('SELECT data FROM trips WHERE owner=? ORDER BY rowid DESC',(owner,))]
+                for record in records:
+                    if record['destination'] in catalog.BY_ID: record['destinationInfo']=catalog.destination(catalog.BY_ID[record['destination']])
+                return reply(records)
             if path == '/api/trips' and method == 'POST':
                 if con.execute('SELECT COUNT(*) FROM trips WHERE owner=?',(owner,)).fetchone()[0] >= 100:
                     return reply({'error':'Trip limit reached'},'400 Bad Request')
@@ -124,7 +137,7 @@ def application(env, start_response):
                     if not isinstance(data,dict): raise ValueError()
                     title = data['title'].strip()
                     if not 1 <= len(title) <= 100: raise ValueError()
-                    if data['destination'] not in {d['id'] for d in DESTINATIONS}: raise ValueError()
+                    if data['destination'] not in {d['id'] for d in DESTINATIONS} and data['destination'] not in catalog.BY_ID: raise ValueError()
                     days, budget = int(data['days']), float(data['budget'])
                     if not 1 <= days <= 60 or not 0 <= budget <= 1000000: raise ValueError()
                     date = data.get('date','')
@@ -149,6 +162,7 @@ def application(env, start_response):
                 return reply({'deleted':bool(deleted)},'200 OK' if deleted else '404 Not Found')
         return reply({'error':'Not found'},'404 Not Found')
     files = {'/':('index.html','text/html'),'/app.js':('app.js','text/javascript'),'/style.css':('style.css','text/css'),'/premium.css':('premium.css','text/css'),'/favicon.svg':('favicon.svg','image/svg+xml'),'/robots.txt':('robots.txt','text/plain'),'/admin':('admin.html','text/html'),'/admin.js':('admin.js','text/javascript'),'/admin.css':('admin.css','text/css')}
+    files.update({'/world.js':('world.js','text/javascript'),'/world.css':('world.css','text/css'),'/city.svg':('city.svg','image/svg+xml')})
     if path in ('/admin','/admin.js','/admin.css'):
         headers.append(('X-Robots-Tag','noindex, nofollow'))
     if path not in files or method not in ('GET','HEAD'): return reply({'error':'Not found'},'404 Not Found')

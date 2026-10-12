@@ -14,7 +14,9 @@ Open http://127.0.0.1:8080. This is a local preview URL, not a public deployment
 
 ## Features
 
-- Six curated destinations with search and category filters.
+- 34,160 cities across 244 countries and territories, country/city search, pagination and sorting.
+- 108 Wikimedia photographs with author/license credits; map links for every city. Six themed curated journeys remain available.
+- User registration and login, 30-day revocable sessions, guest-trip migration and cross-device saved plans.
 - Create, edit and delete trips persisted in PostgreSQL in production or SQLite locally.
 - Per-browser visitor isolation using a random HttpOnly session cookie.
 - Dates, day-by-day itinerary, budget allocation, packing checklist and notes.
@@ -23,7 +25,7 @@ Open http://127.0.0.1:8080. This is a local preview URL, not a public deployment
 - Server validation, parameterized SQL, same-origin mutation checks, security headers.
 - Docker configuration and GitHub Actions backend checks.
 
-Budgets are illustrative USD estimates, not live prices. Images are loaded from Unsplash and require network access. This is a planner, not a booking service. Visitor accounts and cross-device synchronization are not implemented. Owner administration is available at /admin. Clearing the session cookie loses access to that browser's trips; export first. Exported files are backups, with no import UI currently implemented. Other visitors cannot list or edit your trips. The deployment operator can access the database.
+Budgets are illustrative USD estimates, not live prices. Images are loaded from Unsplash / Wikimedia Commons and require network access. This is a planner, not a booking service. Registered users can sign in on another device to retrieve saved trips. Passwords are hashed with PBKDF2; raw passwords are not stored. No email collection or password recovery is provided: use a password manager. Owner administration is available at /admin. In guest mode, clearing cookies loses access to that browser's trips; register or export first. Exported files are backups, with no import UI currently implemented. Other visitors cannot list or edit your trips. The deployment operator can access the database.
 
 ## Production
 
@@ -56,3 +58,9 @@ Backend tests cover persistence, CRUD, visitor isolation, invalid data, CSRF, st
 ## Owner administration
 Open /admin. Set ADMIN_USERNAME and ADMIN_PASSWORD_HASH as hosting environment variables. Generate the hash with admin.password_hash using Python; never commit the password. Login uses PBKDF2-SHA256 (600,000 rounds), one-hour server sessions, five-attempt lockout, same-origin mutation checks and an audit log. Changing the configured password hash invalidates existing sessions. Sessions and lockouts are stored in the persistent database. No claim of a formal security audit is made. The reverse proxy must sanitize forwarding headers; place edge rate limits in front of a high-traffic public deployment.
 
+
+## Catalog sources and coverage
+
+GeoNames cities15000, countryInfo and alternateNamesV2, downloaded October 2026: https://download.geonames.org/export/dump/ (CC BY 4.0). The bundled derived index covers cities above 15,000 residents and selected administrative centres, not every settlement. Search includes alternate names; Russian labels use language-tagged names where available and fall back to the source name. Country display names use browser Intl data. Geographic inclusion is not a travel safety recommendation.
+
+Photographs use Wikipedia summary metadata matched against city coordinates, with Wikimedia Commons author and license attribution in photos.json and on each card. Cities without selected photographs use a neutral map illustration. Daily budgets are generic editable planning scenarios (not researched current destination prices), excluding flights, visas and insurance.
