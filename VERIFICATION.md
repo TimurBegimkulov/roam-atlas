@@ -1,4 +1,4 @@
-# Verification — 2026-10-09
+# Verification — updated 2026-10-12
 
 ## Passed
 
@@ -14,8 +14,8 @@
 
 ## Not yet verified / deployed
 
-- GitHub and Render account connections are not available in this chat yet. No remote repository or public URL has been created.
-- Docker/Gunicorn production deployment has not run here. Local verification used Python's development WSGI server.
+- Public site: https://roam-atlas.onrender.com. GitHub source published; Python checks passed for commit 9961971. Frontend resilience fix deployed as commit 3bacdf2.
+- Render reports Live. Gunicorn/Python backend and Neon PostgreSQL verified through the public site. Created a demo trip, reloaded, edited and saved it; administrator overview displays it. Login/logout, EN/RU, theme, search and mountain filter verified.
 - JSON export button is implemented; downloaded-file contents were not browser-verified.
 - Delete is covered by backend tests; the browser's destructive confirmation was not exercised.
 - Browser checks used the built-in Chromium browser. A separate Google Chrome session was unavailable. Safari/Firefox and physical devices were not tested.
@@ -24,8 +24,10 @@
 
 ## Deployment references
 
-Persistent storage must be configured before a public production deployment. Render persistent disks require a paid service; no paid service has been provisioned.
+Render Free and Neon Free are configured. No paid disk or paid hosting plan was provisioned. Passwords are stored in private hosting settings, not in this repository. Free hosting can take 50 seconds or more to wake after inactivity.
 
 - https://render.com/docs/disks
 - https://render.com/docs/blueprint-spec
 
+
+Public mobile viewport emulation could not be verified in the final browser session; the earlier local 320px/390px checks above apply to the same layout. A physical phone was not tested.

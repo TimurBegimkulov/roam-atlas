@@ -1,6 +1,6 @@
 # Roam Atlas — publication checklist
 
-The source is a complete runnable travel planner. The GitHub repository is https://github.com/TimurBegimkulov/roam-atlas. Public deployment is pending; no hosting URL is claimed.
+The source is a complete runnable travel planner. The GitHub repository is https://github.com/TimurBegimkulov/roam-atlas. Published at https://roam-atlas.onrender.com on Render Free with Neon Free PostgreSQL. The site runs independently of the local computer. Google Search Console submission has not been performed.
 
 1. Create a GitHub repository and push this project's `main` branch. Do not upload `data/`, credentials or `.env` files. The test workflow runs automatically.
 2. Connect a Python web service to that repository. Select the Free plan, with no disk. `render.yaml.example` describes this configuration. Create a free Neon PostgreSQL database and save its private connection string as `DATABASE_URL` in Render, never in GitHub. Complete any required account authorization first.

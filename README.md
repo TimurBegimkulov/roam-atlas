@@ -41,7 +41,7 @@ Free Render services sleep after inactivity, so the first visit can take longer.
 
 Terminate HTTPS at the host proxy, which must sanitize forwarding headers. Gunicorn is intended for Linux production; the included preview server is development-only. GitHub Pages cannot run this Python backend.
 
-Source repository: https://github.com/TimurBegimkulov/roam-atlas. Public deployment is pending. A public URL can open in Chrome after deployment; Google indexing is separate and not guaranteed.
+Live website: https://roam-atlas.onrender.com. Owner console: https://roam-atlas.onrender.com/admin. Source repository: https://github.com/TimurBegimkulov/roam-atlas. A public URL can open in Chrome after deployment; Google indexing is separate and not guaranteed.
 
 ## Verify
 
