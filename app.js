@@ -22,7 +22,21 @@ function openTrip(id,trip){if(!loaded){toast(t('offline'));return}editing=trip?.
 async function save(event){event.preventDefault();const f=$('#tripForm').elements,record={title:f.title.value.trim(),destination:f.destination.value,days:Number(f.days.value),budget:Number(f.budget.value),date:f.date.value,notes:f.notes.value,packed:$$('[data-pack]:checked').map(x=>Number(x.dataset.pack)),itinerary:$$('[data-day]').map(x=>x.value)};$('#saveTrip').disabled=true;$('#saveTrip').textContent=t('saving');$('#formError').textContent='';try{const result=await api(editing?'/api/trips/'+editing:'/api/trips',editing?'PUT':'POST',record);if(editing)trips=trips.map(x=>x.id===editing?result:x);else trips.unshift(result);renderTrips();$('#tripDialog').close();location.hash='trips';toast(t('saved'))}catch{$('#formError').textContent=t('error')}finally{$('#saveTrip').disabled=false;$('#saveTrip').textContent=t('save')}}
 $('#language').onchange=e=>{lang=e.target.value;pref.set('orbit-language',lang);translate()};document.body.classList.toggle('dark',pref.get('orbit-theme')==='dark');$('#theme').onclick=()=>{document.body.classList.toggle('dark');pref.set('orbit-theme',document.body.classList.contains('dark')?'dark':'light')};$$('[data-view]').forEach(b=>b.onclick=()=>location.hash=b.dataset.view);window.onhashchange=showView;['newTrip','heroPlan','editorialPlan'].forEach(id=>$('#'+id).onclick=()=>openTrip());$('#search').oninput=renderDestinations;$$('[data-filter]').forEach(b=>b.onclick=()=>{filter=b.dataset.filter;$$('[data-filter]').forEach(x=>x.classList.toggle('active',x===b));renderDestinations()});$('#closeDialog').onclick=()=>$('#tripDialog').close();$('#tripDialog').onclose=()=>document.body.classList.remove('modal-open');$('#tripForm').onsubmit=save;$('#tripForm').elements.days.oninput=()=>itinerary();$('#tripForm').elements.budget.oninput=budget;$('#destinationSelect').onchange=()=>{const d=destinations.find(x=>x.id===$('#destinationSelect').value);$('#tripForm').elements.days.value=d.days;$('#tripForm').elements.budget.value=d.cost;itinerary()};$('#deleteTrip').onclick=async()=>{if(!confirm(t('confirmDelete')))return;$('#deleteTrip').disabled=true;try{await api('/api/trips/'+editing,'DELETE');trips=trips.filter(x=>x.id!==editing);renderTrips();$('#tripDialog').close();toast(t('deleted'))}catch{$('#formError').textContent=t('error')}finally{$('#deleteTrip').disabled=false}};$('#exportTrips').onclick=()=>{if(!trips.length){toast(t('emptyExport'));return}const blob=new Blob([JSON.stringify({application:'Roam Atlas',version:1,exported:new Date().toISOString(),currency:'USD',trips},null,2)],{type:'application/json'});const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='roam-atlas-trips.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast(t('exported'))};$('#year').textContent=new Date().getFullYear();translate();showView();
 $('#systemItinerary').onclick=()=>{openTrip();if($('#tripDialog').open)$('#itinerary input')?.focus()};$('#systemBudget').onclick=()=>{openTrip();if($('#tripDialog').open)$('#tripForm').elements.budget.focus()};
-async function load(){try{[destinations,trips]=await Promise.all([api('/api/destinations'),api('/api/trips')]);loaded=true;renderDestinations();renderTrips()}catch{$('#destinations').innerHTML=`<div class="empty"><p>${t('offline')}</p><button class="outline" id="retry">${t('retry')}</button></div>`;$('#retry').onclick=load;toast(t('offline'))}}load();
+async function load(){
+  const [catalogResult,tripsResult]=await Promise.allSettled([api('/api/destinations'),api('/api/trips')]);
+  if(catalogResult.status==='fulfilled'){
+    destinations=catalogResult.value;loaded=true;renderDestinations();
+  }else if(!loaded){
+    $('#destinations').innerHTML=`<div class="empty"><p>${t('offline')}</p><button class="outline" id="retry">${t('retry')}</button></div>`;
+    $('#retry').onclick=load;
+  }
+  if(tripsResult.status==='fulfilled'){
+    trips=tripsResult.value;if(loaded)renderTrips();
+  }else{
+    $('#trips').innerHTML=`<div class="empty"><p>${t('offline')}</p><button class="outline" id="retryTrips">${t('retry')}</button></div>`;
+    $('#retryTrips').onclick=load;toast(t('offline'));
+  }
+}load();
 
 // Motion respects the visitor's reduced-motion preference; actions remain immediate.
 const reducedMotion=window.matchMedia('(prefers-reduced-motion: reduce)');
