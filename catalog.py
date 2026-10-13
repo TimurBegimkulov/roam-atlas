@@ -20,7 +20,7 @@ def destination(c):
     if c['code'] in 'KG UZ KZ GE AM IN NP VN TH ID LK LA KH MA EG AL'.split(): daily=50
     elif c['code'] in 'CH NO IS DK US AU NZ SG'.split(): daily=180
     elif c['code'] in 'TR MX PE CO BO RS BG RO PL HU MY PH'.split(): daily=75
-    return dict(id=c['id'],name=c['name'],ru=c['ru'],country=c['country'],country_ru=c['country'],code=c['code'],continent=c['continent'],lat=c['lat'],lon=c['lon'],category='culture',days=5,cost=daily*5,daily=daily,image='',tag='Make this city your next chapter',tag_ru='Новая глава вашего путешествия',**PHOTOS.get(c['id'],{}))
+    return dict(id=c['id'],name=c['name'],ru=c['ru'],country=c['country'],country_ru=COUNTRY_MAP[c['code']].get('ru',c['country']),code=c['code'],continent=c['continent'],lat=c['lat'],lon=c['lon'],category='culture',days=5,cost=daily*5,daily=daily,image='',tag='Make this city your next chapter',tag_ru='Новая глава вашего путешествия',**PHOTOS.get(c['id'],{}))
 def search(query):
     args=parse_qs(query)
     q=normalized(args.get('q',[''])[0][:100]);code=args.get('country',[''])[0][:2]
