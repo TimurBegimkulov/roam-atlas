@@ -30,6 +30,19 @@ class AccountTests(OrbitTests):
         for _ in range(10):
             self.assertEqual(self.request('/api/account/login','POST',{'username':'traveler','password':'incorrect-but-long'})['status'],401)
         self.assertEqual(self.request('/api/account/login','POST',{'username':'traveler','password':'a-long-test-password-42'})['status'],429)
+    def test_other_account_cannot_mutate_a_trip_and_logout_revokes_session(self):
+        self.register('first_traveler')
+        created = self.request('/api/trips', 'POST', self.trip())['body']
+        owner_cookie = self.cookie
+        self.cookie = ''
+        self.register('second_traveler')
+        self.assertEqual(self.request('/api/trips/'+created['id'], 'PUT', self.trip(title='Unauthorized'))['status'], 404)
+        self.assertEqual(self.request('/api/trips/'+created['id'], 'DELETE')['status'], 404)
+        self.cookie = owner_cookie
+        self.assertEqual(self.request('/api/trips')['body'][0]['title'], created['title'])
+        self.request('/api/account/logout', 'POST', {})
+        self.assertIsNone(self.request('/api/account', cookie=owner_cookie)['body']['user'])
+        self.assertEqual(self.request('/api/trips', cookie=owner_cookie)['body'], [])
     def test_world_search_and_trip(self):
         paris=catalog.search('q=Paris&country=FR')['items'][0]
         self.assertEqual(paris['name'],'Paris')

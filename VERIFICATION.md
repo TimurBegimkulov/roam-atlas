@@ -1,37 +1,40 @@
-# Verification — updated 2026-10-12
+# Verification — 2026-10-16
+
+This pre-deployment report describes the upgraded source and its local checks. Public deployment is verified separately against the deployed commit.
 
 ## Passed
 
-- Ten backend test cases, including CRUD/persistence, visitor isolation, ten invalid input variants, mutation origin/header checks, static path restrictions, security headers, secure cookies, catalog/health responses, canonical/sitemap generation, server-rendered destinations, verification escaping, and local noindex behavior.
-- JavaScript syntax check.
-- Live local HTTP health response.
-- Browser UI: English initial UI; create a Kyoto trip, enter itinerary, select packing item, save; change language to Russian, change theme, reload and verify trip persistence; edit trip title and save.
-- Search for Kyoto and category filter for mountains.
-- Visual inspection of the redesigned desktop page at 1440px and mobile page at 390px, including Russian copy and the dark trip dialog.
-- No horizontal overflow at tested mobile width (document width equals scroll width).
-- Roam Atlas branding and touch-size improvements checked at 390px in English and 320px in Russian; no horizontal overflow. The trip form opened successfully at 320px.
-- No browser JavaScript errors observed during the tested workflow.
+- Python backend regression suite: 89 tests passed in 43.246 seconds. Coverage: persistence, CRUD, account/guest isolation, login/logout and expiry, CSRF/origin checks, validation, admin access, static allowlist, JPEG GET/HEAD MIME handling, search and pagination.
+- Exactly 250 current countries/territories have readable bundled JPEGs and author/source/licence metadata. Retired codes AN/CS are excluded.
+- JavaScript syntax checks.
+- Happy DOM interaction checks with mocked APIs: 250 countries in both selectors; local atlas before delayed backend; EN/RU; system/light/dark themes; searches including Timor-Leste/Antarctica; favourites; comparison; details; remote city picker; itinerary/packing; create/edit/delete; unsupported territory empty state; account mode, invalid login, login/logout. These are DOM tests, not browser rendering tests.
+- Follow-up DOM regression checks: a failed city page is retried without skipping it; the load-more label recovers; a delayed search from a closed form does not reset the next trip's destination.
+- Real local Python HTTP server with disposable SQLite: homepage, health, all 250 countries, Dili search, Antarctica empty state, local JPEG responses, trip create/reload/edit/delete and isolation between two visitors passed.
+- Windows local launcher isolation checked with temporary SQLite and inherited sentinel production settings. Local database/port overrides are correct and the caller's environment is restored.
+- Sites artifact: executable ESM, working homepage, all 250 JPEGs, country endpoint, denied private/admin paths and CSRF rejection.
+- Sites proxy: application-cookie allowlist, secure session flags, private no-store responses, checked upstream origin, photo attribution without replacing city descriptions, request-size limits and explicit upstream errors.
+- Local previews returned HTTP 200; the native browser panel was queued to show the full Python app. Temporary QA servers are stopped after checks. Use start-local.cmd for an independent local session.
+- GitHub and Render integrations are now connected and authorized. The user confirmed Render's My Workspace. Read-only service/deployment inspection succeeded; the existing Render release remains live at commit `82ce2fda31bb6e46b79158c4cbd37ba0c4a24327`.
+- On 2026-10-16, the original Render homepage `/` and `/api/health` both returned HTTP 200, and the health response reported `status: ok`. These results verify availability of the existing release, not deployment of this upgraded source.
 
-## Public deployment and remaining limits
+- Real browser checks at desktop 1280×900 and mobile 390×844: country photographs rendered, both country selectors contained all 250 entries, Timor-Leste discovery found Dili, Antarctica remained discoverable with a clear empty city state, EN/RU and light/dark/system controls worked, favourites survived reload, and country comparison displayed the selected facts and images. Mobile content fit the viewport without horizontal overflow.
+- In an isolated local browser session, a Dili trip with dates, budget, itinerary and packing state was created, reloaded, edited and deleted successfully. The calendar download contained the expected all-day dates and trip details.
+- Registration, logout and subsequent login succeeded in the isolated local database; no production account was created during these checks.
+- Country-photo recovery regression checks: a simulated first-request failure recovered automatically; a persistent failure stopped after one retry while the country catalogue remained usable.
+- The ChatGPT Codex Connector installation is now confirmed for the owner account with access restricted to `roam-atlas`. Uploading a prepared photo blob succeeded; the previous GitHub write-access blocker is resolved.
 
-- Public site: https://roam-atlas.onrender.com. GitHub source published; Python checks passed for commit 9961971. Frontend resilience fix deployed as commit 3bacdf2.
-- Render reports Live. Gunicorn/Python backend and Neon PostgreSQL verified through the public site. Created a demo trip, reloaded, edited and saved it; administrator overview displays it. Login/logout, EN/RU, theme, search and mountain filter verified.
-- JSON export button is implemented; downloaded-file contents were not browser-verified.
-- Delete is covered by backend tests; the browser's destructive confirmation was not exercised.
-- Browser checks used the built-in Chromium browser. A separate Google Chrome session was unavailable. Safari/Firefox and physical devices were not tested.
-- External image availability may vary; image files are not bundled.
-- Google indexing has not been requested or verified.
+## Deployment follow-up
 
-## Deployment references
+- Earlier automated browser-rendering attempts failed under Windows pipe restrictions; the subsequent real-browser checks above passed. Print/PDF output has not been visually verified.
+- The original Render availability checks now pass, following HTTP 502 responses observed on 2026-10-15. No successful live account/trip integration is claimed for this upgraded release.
+- Public-release checks must confirm the complete source commit is live on Render and public health, catalogue and photo checks pass.
+- Sites access was changed to public at the user's explicit request (access revision 2). No version was published. Automatic approval review previously rejected source preparation because required approval was disabled, including after narrow filesystem/network permissions were granted. A fresh standard Node child-process check still failed with Windows EPERM on 2026-10-15.
+- Python source runs independently with local SQLite. Production PostgreSQL must be checked when deployed with the owner's existing hosting settings.
 
-Render Free and Neon Free are configured. No paid disk or paid hosting plan was provisioned. Passwords are stored in private hosting settings, not in this repository. Free hosting can take 50 seconds or more to wake after inactivity.
+## Reproduce
 
-- https://render.com/docs/disks
-- https://render.com/docs/blueprint-spec
+    python -m unittest discover -q
+    node --check app.js
+    node --check world.js
 
-
-Public mobile viewport emulation could not be verified in the final browser session; the earlier local 320px/390px checks above apply to the same layout. A physical phone was not tested.
-
-## Expanded catalog and accounts, October 12
-
-Local backend suite passes, including registration, guest-trip migration, relogin, isolation, expiration, validation, CSRF, lockout, multilingual catalog search and geographic trip persistence. Browser signup, logout, login and restored plans verified locally. JavaScript syntax checks pass for app.js and world.js. On October 13, viewport override worked: public RU search, country filter and photographic card visually checked at 390px; document content width 375px within the 390px viewport, no horizontal overflow. Physical phones remain untested. Expanded features deployed on Render Free from commit 9139fb2; GitHub Actions passed. On October 13, public HTTP verification passed: catalog, PostgreSQL registration, trip save, guest isolation, login from a separate cookie jar, logout/relogin, and saved geographic metadata. The disposable test trip was removed and sessions revoked. Public browser Russian city search and trip form also verified.
+Tests use disposable databases. No production password or database connection string is included.

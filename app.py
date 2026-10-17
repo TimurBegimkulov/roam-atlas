@@ -7,6 +7,7 @@ import accounts
 import catalog
 from html import escape
 import json
+import math
 import os
 from pathlib import Path
 import secrets
@@ -138,8 +139,10 @@ def application(env, start_response):
                     title = data['title'].strip()
                     if not 1 <= len(title) <= 100: raise ValueError()
                     if data['destination'] not in {d['id'] for d in DESTINATIONS} and data['destination'] not in catalog.BY_ID: raise ValueError()
+                    if isinstance(data['days'], bool) or isinstance(data['budget'], bool): raise ValueError()
                     days, budget = int(data['days']), float(data['budget'])
-                    if not 1 <= days <= 60 or not 0 <= budget <= 1000000: raise ValueError()
+                    if isinstance(data['days'], float) and data['days'] != days: raise ValueError()
+                    if not 1 <= days <= 60 or not math.isfinite(budget) or not 0 <= budget <= 1000000: raise ValueError()
                     date = data.get('date','')
                     if date: dt.date.fromisoformat(date)
                     notes = data.get('notes','')
@@ -163,10 +166,17 @@ def application(env, start_response):
         return reply({'error':'Not found'},'404 Not Found')
     files = {'/':('index.html','text/html'),'/app.js':('app.js','text/javascript'),'/style.css':('style.css','text/css'),'/premium.css':('premium.css','text/css'),'/favicon.svg':('favicon.svg','image/svg+xml'),'/robots.txt':('robots.txt','text/plain'),'/admin':('admin.html','text/html'),'/admin.js':('admin.js','text/javascript'),'/admin.css':('admin.css','text/css')}
     files.update({'/world.js':('world.js','text/javascript'),'/world.css':('world.css','text/css'),'/city.svg':('city.svg','image/svg+xml')})
+    files.update({'/countries.json':('countries.json','application/json'),'/country-photos.json':('country-photos.json','application/json')})
+    # Only curated catalogue JPEGs are public; never expose a general asset directory.
+    for code, photo in catalog.COUNTRY_PHOTOS.items():
+        image_path = f'/assets-country/{code.lower()}.jpg'
+        if code in catalog.COUNTRY_MAP and photo.get('photo') == image_path:
+            files[image_path] = (image_path.lstrip('/'), 'image/jpeg')
     if path in ('/admin','/admin.js','/admin.css'):
         headers.append(('X-Robots-Tag','noindex, nofollow'))
     if path not in files or method not in ('GET','HEAD'): return reply({'error':'Not found'},'404 Not Found')
     file, mime = files[path]
+    if not (ROOT / file).is_file(): return reply({'error':'Not found'},'404 Not Found')
     content = (ROOT / file).read_bytes()
     if path == '/':
         html = content.decode().replace('<!-- SEARCH_METADATA -->', search_metadata())
@@ -174,7 +184,9 @@ def application(env, start_response):
         cards = ''.join(f'<article class="card"><div class="card-photo"><img loading="lazy" src="https://images.unsplash.com/{d["image"]}?auto=format&amp;fit=crop&amp;w=700&amp;q=80" alt="{escape(d["name"])}"><span class="card-country">{escape(d["country"])}</span></div><div class="card-body"><h3>{escape(d["name"])}</h3><p>{escape(d["tag"])}</p><div class="card-meta"><span>{d["days"]} days</span><span>est. ${d["cost"]:,}</span></div></div></article>' for d in DESTINATIONS)
         html = html.replace('<div id="destinations" class="cards" aria-live="polite"></div>',f'<div id="destinations" class="cards" aria-live="polite">{cards}</div>')
         content = html.encode()
-    start_response(status,headers + [('Content-Type',mime+'; charset=utf-8'),('Content-Length',str(len(content))),('Cache-Control','no-cache')])
+    content_type = mime if mime == 'image/jpeg' else mime+'; charset=utf-8'
+    cache_control = 'public, max-age=3600' if mime == 'image/jpeg' else 'no-cache'
+    start_response(status,headers + [('Content-Type',content_type),('Content-Length',str(len(content))),('Cache-Control',cache_control)])
     return [content] if method == 'GET' else []
 
 if __name__ == '__main__':

@@ -9,6 +9,10 @@ import app
 
 class OrbitTests(unittest.TestCase):
     def setUp(self):
+        # Never let tests connect to a hosting database inherited from the shell.
+        self.environment = patch.dict(os.environ, {'DATABASE_URL': '', 'RENDER': '', 'SITE_URL': ''})
+        self.environment.start()
+        self.original_db = app.DB
         test_root=Path(__file__).resolve().parent/'data'/'tests'
         test_root.mkdir(parents=True,exist_ok=True)
         self.test_path=test_root/('test-'+secrets.token_hex(8)+'.sqlite3')
@@ -17,6 +21,8 @@ class OrbitTests(unittest.TestCase):
     def tearDown(self):
         for suffix in ('','-wal','-shm'):
             Path(str(self.test_path)+suffix).unlink(missing_ok=True)
+        app.DB = self.original_db
+        self.environment.stop()
     def request(self,path,method='GET',data=None,cookie=None,extra=None):
         payload=json.dumps(data).encode() if data is not None else b''
         env={'PATH_INFO':path,'REQUEST_METHOD':method,'wsgi.input':io.BytesIO(payload),'CONTENT_LENGTH':str(len(payload)),'HTTP_COOKIE':self.cookie if cookie is None else cookie,'HTTP_HOST':'localhost','HTTP_X_ORBIT_REQUEST':'1'}
@@ -54,6 +60,39 @@ class OrbitTests(unittest.TestCase):
     def test_csrf(self):
         self.assertEqual(self.request('/api/trips','POST',self.trip(),extra={'HTTP_X_ORBIT_REQUEST':''})['status'],403)
         self.assertEqual(self.request('/api/trips','POST',self.trip(),extra={'HTTP_ORIGIN':'https://evil.test'})['status'],403)
+    def test_numeric_validation_does_not_truncate_days_or_accept_booleans(self):
+        for changes in (dict(days=1.5), dict(days=True), dict(budget=True), dict(budget=float('inf'))):
+            with self.subTest(changes=changes):
+                self.assertEqual(self.request('/api/trips','POST',self.trip(**changes))['status'],400)
+    def test_read_only_catalogue_never_creates_a_private_session(self):
+        response = self.request('/api/countries')
+        self.assertEqual(response['status'], 200)
+        self.assertNotIn('Set-Cookie', response['headers'])
+        countries = {country['code']: country for country in response['body']}
+        self.assertIn('AQ', countries)
+        self.assertNotIn('CS', countries)
+        self.assertEqual(countries['AQ']['cityCount'], 0)
+        page = self.request('/api/world', extra={'QUERY_STRING': 'country=AQ&page=100'})
+        self.assertEqual(page['body']['page'], 1)
+        self.assertEqual(page['body']['items'], [])
+        self.assertNotIn('Set-Cookie', page['headers'])
+    def test_static_data_allowlist_does_not_expose_private_files(self):
+        self.assertEqual(self.request('/countries.json')['status'], 200)
+        for path in ('/.env.example', '/database.py', '/accounts.py', '/data/orbit.sqlite3', '/cities.json.gz', '/country-photos.json/../app.py'):
+            with self.subTest(path=path):
+                self.assertEqual(self.request(path)['status'], 404)
+    def test_country_jpegs_are_public_with_binary_mime_and_head_support(self):
+        response = self.request('/assets-country/fr.jpg')
+        self.assertEqual(response['status'], 200)
+        self.assertEqual(response['headers']['Content-Type'], 'image/jpeg')
+        self.assertTrue(response['body'].startswith(b'\xff\xd8'))
+        self.assertEqual(int(response['headers']['Content-Length']), len(response['body']))
+        head = self.request('/assets-country/fr.jpg', method='HEAD')
+        self.assertEqual(head['body'], b'')
+        self.assertEqual(head['headers']['Content-Length'], response['headers']['Content-Length'])
+        for path in ('/assets-country/FR.jpg', '/assets-country/an.jpg', '/assets-country/zz.jpg', '/assets-country/../app.py', '/assets-country/fr.webp', '/assets-country/fr.jpg/anything'):
+            with self.subTest(path=path):
+                self.assertEqual(self.request(path)['status'], 404)
     def test_static_and_traversal(self):
         home=self.request('/')
         self.assertIn(b'<html lang="en">',home['body'])
