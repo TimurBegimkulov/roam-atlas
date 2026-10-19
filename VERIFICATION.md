@@ -1,6 +1,6 @@
-# Verification — 2026-10-16
+# Verification history
 
-This pre-deployment report describes the upgraded source and its local checks. Public deployment is verified separately against the deployed commit.
+The original pre-deployment checks below describe the atlas upgrade. Later release checks are recorded separately here; publication of each new change must be verified against its deployed commit.
 
 ## Passed
 
@@ -38,3 +38,17 @@ This pre-deployment report describes the upgraded source and its local checks. P
     node --check world.js
 
 Tests use disposable databases. No production password or database connection string is included.
+
+## Published atlas release — 2026-10-18
+
+- GitHub CI passed and Render deployment `dep-db9vh0nbtjjs73d77l20` became live at commit `0cca88b4a6fe9b2961e1d8ca172d9bd227d3cd82`.
+- With the local preview stopped, the public homepage, health, 250-country catalogue, all 250 photo records and all 250 JPEG byte hashes passed. Published frontend files matched the source.
+- Public guest trip creation, reload, edit, visitor isolation and deletion passed under the previous guest-access policy. These checks are historical; the next update intentionally requires an account instead.
+- Published desktop/mobile presentation, photographs, EN/RU and light/dark/system themes were checked in a real browser.
+
+## Account-required trips — 2026-10-19
+
+- Backend regression suite: 94 tests passed. Coverage includes direct unauthenticated requests, forged guest/user cookies, expired and revoked sessions, authenticated CRUD, account isolation, CSRF, and preserving/migrating legacy guest records during registration.
+- Trip access now requires a valid account session on the server. Public country and city discovery remain accessible. No production database migration or replacement is required.
+- Final Happy DOM auth suite: 14 scenarios passed with mocked HTTP, including preserved drafts, cancelled login, expired sessions, explicit save/export after login, Russian labels, and a delayed previous-session response after switching accounts. These are interaction checks, not browser rendering tests.
+- Real browser with a disposable local SQLite database: guest Save opened registration; cancelling preserved all draft fields; registration retained the draft without saving; a separate Save persisted the trip across reload; logout removed private trip details from view; signing in again restored the saved trip. No production account or trip was created for these checks.

@@ -1,7 +1,6 @@
 """Orbit: dependency-free WSGI app; Gunicorn serves the same app in production."""
 import datetime as dt
 from contextlib import contextmanager
-import hashlib
 import admin
 import accounts
 import catalog
@@ -13,7 +12,6 @@ from pathlib import Path
 import secrets
 import sqlite3
 from urllib.parse import urlsplit
-from http.cookies import SimpleCookie
 from wsgiref.simple_server import make_server
 
 ROOT = Path(__file__).parent
@@ -104,20 +102,13 @@ def application(env, start_response):
         start_response('200 OK', headers + [('Content-Type',mime+'; charset=utf-8'),('Content-Length',str(len(content)))])
         return [content] if method == 'GET' else []
     if path.startswith('/api/'):
-        cookie = SimpleCookie()
-        try: cookie.load(env.get('HTTP_COOKIE',''))
-        except Exception: pass
-        token = cookie['orbit_session'].value if 'orbit_session' in cookie else ''
-        owner = hashlib.sha256(token.encode()).hexdigest()
+        if path != '/api/trips' and not path.startswith('/api/trips/'):
+            return reply({'error':'Not found'},'404 Not Found')
         with connect() as con:
             user=accounts.current(con,env)
-            if user: owner=user['id']
-            if not user and not con.execute('SELECT 1 FROM visitors WHERE id=?',(owner,)).fetchone():
-                token = secrets.token_urlsafe(32)
-                owner = hashlib.sha256(token.encode()).hexdigest()
-                con.execute('INSERT INTO visitors VALUES (?)',(owner,))
-                secure = '; Secure' if env.get('HTTP_X_FORWARDED_PROTO',env.get('wsgi.url_scheme')) == 'https' else ''
-                headers.append(('Set-Cookie',f'orbit_session={token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=31536000{secure}'))
+            if not user:
+                return reply({'error':'authentication_required'},'401 Unauthorized')
+            owner=user['id']
             if method in ('POST','PUT','DELETE'):
                 origin = env.get('HTTP_ORIGIN','')
                 if env.get('HTTP_X_ORBIT_REQUEST') != '1' or (origin and origin.split('://')[-1] != env.get('HTTP_HOST')):

@@ -1,11 +1,14 @@
 import io
 import os
 import json
+import hashlib
 import secrets
+import time
 import unittest
 from unittest.mock import patch
 from pathlib import Path
 import app
+import accounts
 
 class OrbitTests(unittest.TestCase):
     def setUp(self):
@@ -38,7 +41,25 @@ class OrbitTests(unittest.TestCase):
         result=dict(title='A trip <script>',destination='kyoto',days=7,budget=1400,date='2027-05-01',notes='Café 日本',packed=[0,2],itinerary=['Arrival'])
         result.update(changes)
         return result
+    def authenticate_user(self, name='traveler'):
+        # Keep trip tests fast; account tests exercise real registration and login.
+        session = secrets.token_urlsafe(48)
+        owner = 'user:' + secrets.token_hex(16)
+        with app.connect() as con:
+            accounts.schema(con)
+            con.execute('INSERT INTO users VALUES (?,?,?)', (owner, name, 'unused-test-password-hash'))
+            con.execute('INSERT INTO user_sessions VALUES (?,?,?)', (hashlib.sha256(session.encode()).hexdigest(), owner, int(time.time()) + 86400))
+        self.cookie = 'roam_user=' + session
+        return owner
+    def register_user(self, name='traveler', extra=None):
+        return self.request('/api/account/register', 'POST', {'username':name, 'password':'a-long-test-password-42'}, extra=extra)
+    def assert_authentication_required(self, response):
+        self.assertEqual(response['status'], 401)
+        self.assertEqual(response['body'], {'error':'authentication_required'})
+        self.assertEqual(response['headers']['Cache-Control'], 'no-store')
+        self.assertNotIn('Set-Cookie', response['headers'])
     def test_full_lifecycle(self):
+        self.authenticate_user()
         self.assertEqual(self.request('/api/trips')['body'],[])
         created=self.request('/api/trips','POST',self.trip())
         self.assertEqual(created['status'],201)
@@ -48,19 +69,39 @@ class OrbitTests(unittest.TestCase):
         self.assertEqual(self.request('/api/trips')['body'][0]['title'],'Changed')
         self.assertEqual(self.request('/api/trips/'+id,'DELETE')['status'],200)
         self.assertEqual(self.request('/api/trips')['body'],[])
-    def test_visitor_isolation(self):
+    def test_guest_cannot_read_or_mutate_an_account_trip(self):
+        self.authenticate_user()
         id=self.request('/api/trips','POST',self.trip())['body']['id']
-        self.assertEqual(self.request('/api/trips',cookie='')['body'],[])
-        self.assertEqual(self.request('/api/trips/'+id,'PUT',self.trip(),cookie='')['status'],404)
-        self.assertEqual(self.request('/api/trips/'+id,'DELETE',cookie='')['status'],404)
+        for path, method, data in (('/api/trips', 'GET', None), ('/api/trips', 'POST', self.trip()), ('/api/trips/'+id, 'PUT', self.trip(title='Unauthorized')), ('/api/trips/'+id, 'DELETE', None)):
+            with self.subTest(method=method):
+                self.assert_authentication_required(self.request(path, method, data, cookie=''))
         self.assertEqual(len(self.request('/api/trips')['body']),1)
+        self.assertEqual(self.request('/api/trips')['body'][0]['title'], self.trip()['title'])
+    def test_guest_and_forged_cookies_never_create_private_sessions(self):
+        for cookie in ('', 'orbit_session=forged', 'roam_user=forged', 'roam_user=forged; orbit_session=forged'):
+            for path, method, data in (('/api/trips', 'GET', None), ('/api/trips', 'POST', self.trip()), ('/api/trips/unknown', 'PUT', self.trip()), ('/api/trips/unknown', 'DELETE', None)):
+                with self.subTest(cookie=cookie, method=method):
+                    self.assert_authentication_required(self.request(path, method, data, cookie=cookie))
+        # Even a direct browser/form request without the application CSRF header
+        # must not acquire a guest session or bypass the authentication gate.
+        self.assert_authentication_required(self.request('/api/trips', 'POST', self.trip(), extra={'HTTP_X_ORBIT_REQUEST':''}))
+        with app.connect() as con:
+            for table in ('visitors', 'trips', 'users', 'user_sessions'):
+                self.assertEqual(con.execute('SELECT COUNT(*) FROM '+table).fetchone()[0], 0)
     def test_validation(self):
+        self.authenticate_user()
         for changes in [dict(days=0),dict(days=61),dict(budget=-1),dict(budget=float('nan')),dict(title='  '),dict(destination='fake'),dict(date='invalid'),dict(packed=[7]),dict(notes='x'*3001),dict(itinerary=['x'*201])]:
             with self.subTest(changes=changes):self.assertEqual(self.request('/api/trips','POST',self.trip(**changes))['status'],400)
     def test_csrf(self):
-        self.assertEqual(self.request('/api/trips','POST',self.trip(),extra={'HTTP_X_ORBIT_REQUEST':''})['status'],403)
-        self.assertEqual(self.request('/api/trips','POST',self.trip(),extra={'HTTP_ORIGIN':'https://evil.test'})['status'],403)
+        self.authenticate_user()
+        created = self.request('/api/trips', 'POST', self.trip())['body']
+        for extra in ({'HTTP_X_ORBIT_REQUEST':''}, {'HTTP_ORIGIN':'https://evil.test'}):
+            for path, method, data in (('/api/trips', 'POST', self.trip()), ('/api/trips/'+created['id'], 'PUT', self.trip(title='Unauthorized')), ('/api/trips/'+created['id'], 'DELETE', None)):
+                with self.subTest(extra=extra, method=method):
+                    self.assertEqual(self.request(path, method, data, extra=extra)['status'], 403)
+        self.assertEqual(self.request('/api/trips')['body'], [created])
     def test_numeric_validation_does_not_truncate_days_or_accept_booleans(self):
+        self.authenticate_user()
         for changes in (dict(days=1.5), dict(days=True), dict(budget=True), dict(budget=float('inf'))):
             with self.subTest(changes=changes):
                 self.assertEqual(self.request('/api/trips','POST',self.trip(**changes))['status'],400)
@@ -101,6 +142,11 @@ class OrbitTests(unittest.TestCase):
         self.assertEqual(self.request('/../app.py')['status'],404)
         self.assertEqual(self.request('/app.py')['status'],404)
     def test_catalog(self):
+        for path in ('/api/destinations', '/api/health', '/api/world', '/api/countries'):
+            with self.subTest(path=path):
+                response = self.request(path, cookie='roam_user=forged')
+                self.assertEqual(response['status'], 200)
+                self.assertNotIn('Set-Cookie', response['headers'])
         self.assertEqual(len(self.request('/api/destinations')['body']),6)
         self.assertEqual(self.request('/api/health')['body']['status'],'ok')
     def test_public_search_metadata(self):
@@ -124,7 +170,12 @@ class OrbitTests(unittest.TestCase):
             self.assertNotIn('rel="canonical"',html)
             self.assertNotIn('<script>alert(1)</script>',html)
     def test_secure_cookie(self):
-        self.assertIn('Secure',self.request('/api/trips',extra={'HTTP_X_FORWARDED_PROTO':'https'})['headers']['Set-Cookie'])
-        self.assertIn('HttpOnly',self.request('/api/trips',cookie='')['headers']['Set-Cookie'])
+        response = self.register_user(extra={'HTTP_X_FORWARDED_PROTO':'https'})
+        self.assertEqual(response['status'], 200)
+        cookie = response['headers']['Set-Cookie']
+        self.assertTrue(cookie.startswith('roam_user='))
+        for flag in ('Secure', 'HttpOnly', 'SameSite=Strict'):
+            self.assertIn(flag, cookie)
+        self.assertNotIn('Set-Cookie', self.request('/api/trips')['headers'])
 
 if __name__=='__main__': unittest.main()

@@ -28,6 +28,7 @@ class AdminTests(OrbitTests):
         with patch.dict(os.environ,{'ADMIN_PASSWORD_HASH':admin.password_hash('new-test-only-password')}):
             self.assertEqual(self.request('/api/admin/overview')['status'],401)
     def test_admin_delete_requires_auth(self):
+        self.authenticate_user()
         trip=self.request('/api/trips','POST',self.trip())['body']
         self.assertEqual(self.request('/api/admin/trips/'+trip['id'],'DELETE')['status'],401)
         self.login()

@@ -27,9 +27,9 @@ On Windows, double-click `start-local.cmd` to use an isolated local configuratio
 - A local JPEG for every current country/territory, with Wikimedia source, author and licence metadata. Individual city photographs take precedence; country fallback photographs are identified as country images.
 - Search countries by name, code or capital; filter by continent, save favourites, compare up to three countries, or discover a random destination.
 - Country detail panels with capital, currency, maps and links to Wikivoyage.
-- User registration and login, 30-day revocable sessions, guest-trip migration and cross-device saved plans.
+- Registration and login required for saved trips, with 30-day revocable sessions and cross-device access. Existing legacy guest trips transfer when a new account is created in the same browser.
 - Create, edit and delete trips persisted in PostgreSQL in production or SQLite locally.
-- Per-browser visitor isolation using a random HttpOnly session cookie.
+- Account-scoped trip access; unauthenticated trip API requests are rejected by the server. Public destination browsing and an unsaved draft remain available.
 - Dates, day-by-day itinerary, budget allocation, packing checklist and notes.
 - JSON export for backups, calendar `.ics` export, and print/PDF layout for a trip.
 - EN/RU translation and persistent light, dark or system theme that responds to system changes.
@@ -37,7 +37,7 @@ On Windows, double-click `start-local.cmd` to use an isolated local configuratio
 - Server validation, parameterized SQL, same-origin mutation checks, security headers.
 - Docker configuration and Python regression tests.
 
-Budgets are illustrative USD planning estimates, not live prices. Country photographs are bundled in `assets-country/`; some city and legacy journey photographs still load from Wikimedia Commons or Unsplash. This is a planner, not a booking service. Registered users can sign in on another device to retrieve saved trips. Passwords are hashed with PBKDF2; raw passwords are not stored. No email collection or password recovery is provided: use a password manager. Owner administration is available at `/admin` on the Python deployment. In guest mode, clearing cookies loses access to that browser's trips; register or export first. Exported JSON files are backups, with no import UI currently implemented. Other visitors cannot list or edit your trips. The deployment operator can access the database.
+Budgets are illustrative USD planning estimates, not live prices. Country photographs are bundled in `assets-country/`; some city and legacy journey photographs still load from Wikimedia Commons or Unsplash. This is a planner, not a booking service. Register or sign in to save, retrieve or export trips. Public browsing and unsaved planning remain available; the current draft is retained while signing in, but is not stored for guests. Existing guest records are preserved and can transfer when registering from the same browser with its original cookie. Registered users can sign in on another device to retrieve saved trips. Passwords are hashed with PBKDF2; raw passwords are not stored. No email collection or password recovery is provided: use a password manager. Owner administration is available at `/admin` on the Python deployment. Exported JSON files are backups, with no import UI currently implemented. Other visitors cannot list or edit your trips. The deployment operator can access the database.
 
 ## Production
 
